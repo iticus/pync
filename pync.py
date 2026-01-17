@@ -27,7 +27,7 @@ def load_env(path: str):
             os.environ[key] = value
 
 
-async def tcp_client(host, port):
+async def tcp_client(host: str, port: int):
     reader, writer = await asyncio.open_connection(host, port)
     print("opened")
     if port == 6379:  # handle Redis auth automatically
@@ -35,18 +35,22 @@ async def tcp_client(host, port):
         redis_pwd = os.getenv("REDISCLI_AUTH", "")
         message = f"auth {redis_user} {redis_pwd}\n"
         writer.write(message.encode())
+        await writer.drain()
         data = await reader.read(100)
         print(data.decode())
     while True:
-        message = input()
+        try:
+            message = input()
+        except EOFError:
+            break
         data = message + "\n"
         writer.write(data.encode())
+        await writer.drain()
         data = await reader.read(256 * 256)
         if message.lower().strip() == "quit" and data == b"+OK\r\n":
             break
         print(data.decode())
-
-    print('closing connection')
+    print("closing connection")
     writer.close()
     await writer.wait_closed()
 
@@ -56,4 +60,9 @@ if __name__ == "__main__":
     config = Path.home() / ".pync"
     if config.is_file():
         load_env(config)
-    asyncio.run(tcp_client("127.0.0.1", 6379))
+    if len(sys.argv) < 3:
+        sys.exit("provide host and port values")
+    if not sys.argv[2].isdigit():
+        sys.exit("provide valid port value")
+    host, port = sys.argv[1], int(sys.argv[2])
+    asyncio.run(tcp_client(host, port))
